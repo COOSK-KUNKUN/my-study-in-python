@@ -1,8 +1,11 @@
-#coding=utf-8 (重要)
+#coding=utf-8 
 import math;
 import random;
 import time;
 import calendar
+import support
+
+
 
 import sys; x='coosk'; sys.stdout.write(x + '\n')
 
@@ -100,7 +103,7 @@ print m;
 
 print '\n'
 
-def printme( like,hate ):     # 函数
+def printme( like,hate ):        # 函数
    "YOOOOOO"
    print ('Like'),like;
    print ('Hate'),hate;
@@ -110,14 +113,48 @@ printme(like = 'cat',hate = 'dog');
 
 print '\n'
 
-def function(var1,var2):     # 可写函数说明
+def function(var1,var2):         # 可写函数说明
 	total = var1 + var2
 	print ('the value is :'),total
 	return total;
 
-total = function(13,53);     # 调用function函数,对total进行定义
+total = function(13,53);         # 调用function函数,对total进行定义
 
 print '\n'
+
+support.TheName('COOSK')         # 调用support模块中的内容
+
+print '\n'
+
+content = dir(math)              # content内容，dir()函数一个排好序的字符串列表，内容是一个模块里定义过的名字。
+print content;
+
+print '\n'
+
+# 输入
+str0 = raw_input('please enter your input:') 
+print 'I think your input is:',str0
+
+print '\n'
+
+#file object = open(file_name [, access_mode][, buffering])
+#打开和关闭文件
+fo = open('food.txt','wb')
+print 'file name:',fo.name
+print 'is close or not ? ',fo.close
+print 'opening mode :',fo.mode   # 访问模式
+
+print '\n'
+
+# 对文件进行写入
+fo = open('C:/Users/Administrator/Desktop/food.txt','wb')
+fo.write('python is a great language')
+# 写入完后关闭文件
+fo.close()
+
+print '\n'
+
+
 
 print 'all code are over'
 
