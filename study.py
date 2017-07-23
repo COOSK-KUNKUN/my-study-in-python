@@ -73,7 +73,7 @@ for x in range(20,30):             # 迭代 10 到 20 之间的数字
 
 print '\n'
 
-print 'math.ceil(100.12) : ',math.ceil(100.12) # 返回大于或者等于指定表达式的最小整数
+print 'math.ceil(100.12) : ',math.ceil(100.12)   # 返回大于或者等于指定表达式的最小整数
 
 print '\n'
 
@@ -89,7 +89,7 @@ print 'my name is %s i am %d old' % ('COOSK',20) #  %s格式化字符串  %d格�
 
 print '\n'
 
-t=time.asctime(time.localtime(time.time())  )                    # 获取时间    
+t=time.asctime(time.localtime(time.time())  )    # 获取时间    
 print 'the time is :', t 
 
 print '\n'
@@ -97,6 +97,25 @@ print '\n'
 m = calendar.month(2017,7)
 print 'the month is :'
 print m;
+
+print '\n'
+
+def printme( like,hate ):     # 函数
+   "YOOOOOO"
+   print ('Like'),like;
+   print ('Hate'),hate;
+   return;
+
+printme(like = 'cat',hate = 'dog');
+
+print '\n'
+
+def function(var1,var2):     # 可写函数说明
+	total = var1 + var2
+	print ('the value is :'),total
+	return total;
+
+total = function(13,53);     # 调用function函数,对total进行定义
 
 print '\n'
 
