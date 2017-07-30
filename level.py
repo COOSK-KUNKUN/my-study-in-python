@@ -73,6 +73,106 @@ c.getAttr()	                    # 再次调用父类的方法
 
 print '\n'
 
+class dog(object):
+	"""docstring for ClassName"""
+	def __init__( self ):
+		print 'wang!'
+		pass
+
+	def dogMethod( self ):
+		print 'aowuuuuuuuu!'
+		pass
+
+	def setAttr( self, attr ):
+		dog.dogAttr = attr
+		pass
+
+	def getAttr( self ):
+		print 'emmmmmmmmmmm'
+		pass
+
+class cat(dog):
+	"""docstring for cat"""
+	def __init__(self ):
+		print 'miaomiaomiao'
+		pass
+
+	def catMthod( self ):
+		print 'miaoooooooooo'
+		pass
+
+d = cat()
+d.catMthod()
+d.dogMethod()
+
+print '\n'		
+
+class sun(object):             # 方法重写 如果你的父类方法的功能不能满足你的需求，你可以在子类重写你父类的方法
+	"""docstring for sun"""
+	def myMethod( self ):
+		print '调用父类的方法'
+		pass
+
+class moon(object):
+	"""docstring for moon"""
+	def myMethod( self ):
+		print '调用子类的方法，并实现方法的重写（重载）'
+		pass
+
+a = moon()
+a.myMethod()
+
+print '\n'
+
+class num(object):
+	"""运算符重载 for num"""
+	def __init__(self,a,b):
+		self.a = a
+		self.b = b
+		pass
+
+	def __str__( self ):          
+	    # 用于将值转化为适于人阅读的形式,简单的调用方法 : str(obj)  
+         return 'num is (%d,%d)' % (self.a,self.b)
+		 
+
+	def __add__( self,other ):
+         return 'num is (%d,%d)' % (self.a + other.a,self.b + other.b)
+
+n1 = num(5,10)
+n2 = num(3,-2)
+print n1+n2		
+
+print '\n'
+
+# 类的私有方法
+# __private_method：两个下划线开头，声明该方法为私有方法，不能在类地外部调用。
+# 在类的内部调用 slef.__private_methods
+
+class private(object):
+	"""docstring for private"""
+	__privateCount = 0     # 私有变量
+	publicCount = 0        # 公开变量
+
+	def count( self ):
+		self.__privateCount += 1
+		self.publicCount += 1
+		print self.__privateCount
+		
+counter = private()
+counter.count()
+counter.count()
+print counter.publicCount   # 无（）
+
+try:
+	print counter.__privateCount()
+	pass
+except Exception as e:
+	print '报错，实例不能访问私有变量'
+	
+print '\n'
+
+
 print 'all code are over'
 
 raw_input("\n\nPress the enter key to exit.") #回车结束程序
