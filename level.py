@@ -1,5 +1,6 @@
 #coding=utf-8 
 import math
+import re
 
 class ClassName(object):                   # 创建类
 	"""所有学生的基类"""   
@@ -172,6 +173,40 @@ except Exception as e:
 	
 print '\n'
 
+# 正则表达式
+# re.match(pattern, string, flags=0)
+# pattern	匹配的正则表达式
+# string	要匹配的字符串
+# flags	标志位，用于控制正则表达式的匹配方式，如：是否区分大小写，多行匹配
+# ^ 	匹配字符串的开头
+# $ 	匹配字符串的末尾
+# re.M 	多行匹配，影响 ^ 和 $
+# re.I 	使匹配对大小写不敏感
+line = 'cat are cute than dog'    
+
+matchObj = re.match(r'(.*)are(.*?e).*', line,re.M|re.I)
+# * 是取 0 至 无限长度
+# ? 是非贪婪模式
+# *?何在一起就是 取尽量少的任意字符
+# .*?a就是取前面任意长度的字符，到底一个 a 出现，匹配如下
+# q@wer_qwerqweraljlkjlkjlkj
+# 得到：q@wer_qwerqwera  这部分，如果匹配不到后面的 a 字符，则匹配为空。
+if matchObj:
+	print 'matchObj.group() : ',matchObj.group()
+	print 'matchObj.group(1) : ',matchObj.group(1)
+	print 'matchObj.group(2) : ',matchObj.group(2)
+else:
+	print 'no!!'	
+
+print '\n'
+
+# re.search 扫描整个字符串并返回第一个成功的匹配。
+# re.search(pattern, string, flags=0)
+print (re.search('coosk', 'coosk-kunkun.github.io').span())   # 在起始位置匹配
+print (re.search('io', 'coosk-kunkun.github.io').span())      # 不在起始位置匹配
+# span() 返回一个元组包含匹配 (开始,结束) 的位置
+
+print '\n'
 
 print 'all code are over'
 
