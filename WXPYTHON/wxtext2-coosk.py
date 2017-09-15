@@ -5,13 +5,15 @@ import wx
 class text(wx.Frame):
 	"""docstring for text"""
 	def __init__(self, parent, title):
+  	# Parent 窗口的父类。如果“None”被选择的对象是在顶层窗口。
+
 		wx.Frame.__init__(self, parent, title = title, size = (300,200))
 		self.control = wx.TextCtrl(self, style = wx.TE_MULTILINE)
 		self.Show(True)
 # wx.TextCtrl 来声明一个简单的文本编辑器
 # 因为在MyFrame.__init__ 中已经运行了self.Show()
 # 所以在创建MyFrame的实例之后，就不用再调用frame.Show() 了。
-# style值有：
+# style（窗口的外观按样式风格常数控制）值有：
 # wx.TE_MULTILINE:文本控制显示多行
 # wx.TE_RICH:用于windows，允许丰富文本样式的使用
 # wx.TE_WORDWARP:以单词为界自动换行
