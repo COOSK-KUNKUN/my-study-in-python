@@ -54,7 +54,7 @@ class mycoosk(wx.Frame):
 
     def OnStart(self,event):
         while True:
-            time.sleep(1);
+           
             self.count = self.count + 1
             self.gauge.SetValue(self.count)
 
