@@ -10,6 +10,8 @@ class QSBK:
     """初始化方法"""
     def __init__(self):
         self.pageIndex = 1
+        # 开始的页数
+
         self.user_agent = 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'
         self.headers = {'User-Agent':self.user_agent}
 
