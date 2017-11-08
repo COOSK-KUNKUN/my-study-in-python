@@ -16,9 +16,10 @@ class QSBK:
         self.headers = {'User-Agent':self.user_agent}
 
         self.stories = []
-        #存放程序是否继续运行的变量
+        #存放段子的变量，每一个元素是每一页的段子们
 
         self.enable = False
+        # 存放程序是否继续运行的变量
 
     def getPage(self,pageIndex):
         try:
