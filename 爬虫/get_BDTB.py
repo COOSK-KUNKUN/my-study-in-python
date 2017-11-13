@@ -23,6 +23,7 @@ class Tool:
     # 把段落开头换为\n加空两格
 
     replaceBR = re.compile('<br><br>|<br>')
+    # 将换行符或双换行符替换为\n
 
     def replace(self, x):
         x= re.sub(self.removeImg, '', x)
@@ -31,8 +32,8 @@ class Tool:
         x= re.sub(self.replaceTD,'\t',x)
         x= re.sub(self.replacePara,'\n  ',x)
         x= re.sub(self.replaceBR, '\n',x)
-
         return x.strip()
+        # strip()替换
 
 
 class BDTB:
@@ -47,7 +48,7 @@ class BDTB:
 
         self.tool = Tool()
 
-
+    # 初始化，传入基地址，是否只看楼主的参数
 
     def getPage(self, pageNum):
         try:
@@ -55,12 +56,13 @@ class BDTB:
             requset = urllib2.Request(url)
             response = urllib2.urlopen(requset)
             return response.read().decode('utf-8')
+            # 将页面转化为UTF-8编码
+
         except urllib2.URLError, e:
             if hasattr(e, "reason"):
                 print u"Error please try again",e.reason
                 return None
-
-
+    # 传入页码，获取该页帖子的代码
 
     def getTitle(self):
         page = self.getPage(1)
@@ -70,6 +72,7 @@ class BDTB:
             return result.group(1).strip()
         else:
             return None
+    # 获取帖子标题
 
     def getPageNum(self):
         page = self.getPage(1)
@@ -79,11 +82,13 @@ class BDTB:
             return result.group(1).strip()
         else:
             return None
+    # 获取帖子一共有多少页
 
     def getContent(self, page):
         pattern = re.compile('<div id="post_content_.*?>(.*?)</div>',re.S)
         items = re.findall(pattern, page)
         print self.tool.replace(items[1])
+    # 获取每一层楼的内容,传入页面内容
 
 
 
