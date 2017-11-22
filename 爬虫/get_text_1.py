@@ -5,7 +5,7 @@ import urllib
 import re
 
 
-class TP(object):
+class TP:
     """https://www.deviantart.com/"""
     """https://www.deviantart.com/?offset=48"""
     def __init__(self):
@@ -44,5 +44,6 @@ class TP(object):
 
 spider = TP()
 spider.start()
+
 
 
