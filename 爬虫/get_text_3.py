@@ -21,7 +21,10 @@ def getImg(html):
 imagesUrl = getImg(html)
 
 if os.path.exists("D:/image") == False :
+# 路径存在则返回True,路径损坏返回False
+
     os.mkdir("D:/image")
+    # 创建一个在 D 盘为 imags 的文件夹
     pass
 
 count = 0
@@ -33,9 +36,12 @@ for url in imagesUrl:
         request = urllib2.Request(url,headers = headers)
         bytes = urllib2.urlopen(request)
         f = open("D:/image/" + str(count) + name, "wb")
+        # open(路径+文件名,读写模式)
+        #读写模式:r只读,r+读写,w新建(会覆盖原有文件),a追加,b二进制文件.常用模式
+
         f.write(bytes.read())
-        f.flush()
-        f.close()
+        f.flush() # 刷新
+        f.close() # 关闭文件
         count+=1
         print 'get it'
         pass
