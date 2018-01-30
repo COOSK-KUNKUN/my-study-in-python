@@ -1,6 +1,7 @@
 # -*- coding: UTF-8 -*-
 
 import libtcodpy as libtcod
+import math
 
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
@@ -32,6 +33,9 @@ playery = SCREEN_HEIGHT/2
 # 备用1
 '''
 
+MAX_ROOM_MONSTERS = 3
+# 最大怪物量为3
+
 libtcod.console_set_custom_font('arial12x12.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # 设定字体
 # 字体来源于 arial12x12.png 的位图字体
@@ -57,8 +61,8 @@ libtcod.console_blit( con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 # foregroundAlpha，backgroundAlpha 控制台的Alpha透明度
 # 1.0 =>源控制台是不透明的
 
-class Tile: # 设定能否通过的区域
-    """docstring for Tile"""
+class Tile:
+    """设定能否通过的区域"""
     def __init__(self, blocked, block_sight = None):
         self.blocked = blocked
 
@@ -71,14 +75,29 @@ class Tile: # 设定能否通过的区域
 
 class Object:
     """这是一个通用的对象：玩家，怪物，物品，楼梯......  """
-    def __init__(self, x, y, char, color ):
+    def __init__(self, x, y, char,  name , color, blocks = False, fighter = None, ai = None):
         self.x = x
         self.y = y
         self.char = char
+        self.name = name
         self.color = color
+        self.blocks = blocks
+
+        self.fighter = fighter
+        if self.fighter:
+            # 让战斗系统‘知道’谁拥有它
+            self.fighter.owner = self
+            pass
+
+        self.ai = ai
+        if self.ai:
+            # 让AI系统‘知道’谁拥有它
+            self.ai.owner = self
+            pass
 
     def move(self, dx, dy):
-        if not map[self.x + dx][self.y + dy].blocked:# 如果移动超出地图自动退出
+        '''if not map[self.x + dx][self.y + dy].blocked:# 如果移动超出地图自动退出 备用'''
+        if not is_blocked(self.x + dx, self.y + dy):
             self.x += dx
             self.y += dy
         pass
@@ -90,6 +109,29 @@ class Object:
 
     def clear(self):
         libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
+        pass
+
+    def move_towards(self, target_x, target_y):
+        # 算出从此对象（怪物）到目标（玩家）的距离
+        dx = target_x - self.x
+        dy = target_y - self.y
+        distance = math.sqrt(dx ** 2 + dy ** 2) # dx的2次方，dy的2次方
+
+        dx = int(round(dx / distance))
+        dy = int(round(dy / distance))
+        self.move(dx, dy)
+        pass
+
+    def distance_to(self, other):
+        # 返回到另一个对象的距离
+        dx = other.x - self.x
+        dy = other.y - self.y
+        return math.sqrt(dx ** 2 + dy ** 2)
+
+    def send_to_back(self):
+        global object
+        object.remove(self)
+        object.insert(0, self)
         pass
 
 class Rect:
@@ -111,6 +153,56 @@ class Rect:
         return (self.x1 <= other.x2 and self.x2 >= other.x1 and
                 self.y1 <= other.y2 and self.y2 >= other.y1)
     # 分割 room 之间的距离使之不重叠
+
+class Fighter:
+    """与战斗有关的属性和方法（怪物， 玩家， NPC）"""
+    def __init__(self, hp, defense, power, death_function = None):
+        self.max_hp = hp
+        self.hp = hp
+        self.defense = defense
+        self.power = power
+        self.death_function = death_function
+
+    def take_damage(self, damage):
+        # 伤害以及损伤
+        if damage > 0:
+            self.hp -= damage
+
+        if self.hp <= 0:
+        # 检查目标是否死亡。如果是，调用死亡函数。
+            function = self.death_function
+            if function is not None:
+                function(self.owner)
+
+    def attack(self, target):
+        # 一个简单的计算攻击伤害公式
+        damage = self.power - target.fighter.defense
+
+        if damage > 0:
+            # 使目标受到伤害
+            print self.owner.name.capitalize() + 'attack' + target.name + 'for' + str(damage) + 'hit points.'
+            target.fighter.take_damage(damage)
+        else:
+            print self.owner.name.capitalize() + 'attack' + target.name + 'but it has no effect!'
+            pass
+        pass
+
+class BasicMonster:
+    """基本怪物AI"""
+    def take_turn(self):
+        # 一个基本的怪物‘视觉’,在玩家的FOV内,如果你能看到它，它也可以看到你
+        monster = self.owner
+        if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
+            pass
+
+            if monster.distance_to(player) >= 2:# 如果怪物距离玩家 >=2,就移动向玩家
+                monster.move_towards(player.x, player.y)
+                pass
+
+            elif player.fighter.hp > 0:
+            # 如果怪物距离玩家小于2,就攻击玩家，并判断玩家是否存活
+                monster.fighter.attack(player)
+                print 'The attack of the ' + monster.name + 'bounces off your shiny metal armor'
 
 def create_room(room):
     global map
@@ -216,6 +308,8 @@ def make_map():
                     # 首先垂直移动，然后水平移动
                 pass
 
+            place_objects(new_room)
+
             rooms.append(new_room)
             num_rooms +=1
 
@@ -242,6 +336,49 @@ def create_v_tunnel(y1, y2, x):# 垂直隧道
         map[x][y].block_sight = False
         pass
     pass
+
+def place_objects(room):
+    # 选择怪物的随机数
+
+    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+
+    for i in range(num_monsters):
+        # 随机怪物的出生点
+        x = libtcod.random_get_int(0, room.x1, room.x2)
+        y = libtcod.random_get_int(0, room.y1, room.y2)
+
+        if not is_blocked(x, y):
+            # 如果没有被阻塞
+            if libtcod.random_get_int(0, 0, 100) < 80:
+                # 80%的几率生成一个兽人
+
+                fighter_component = Fighter(hp = 10, defense = 0, power = 3, death_function = monster_death)
+                # 设置生命，防御力，力量
+
+                ai_component = BasicMonster()
+
+                monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks = True,fighter = fighter_component, ai = ai_component)
+            else:
+                # 否则生成一个巨魔
+                fighter_component = Fighter(hp = 16, defense = 1, power = 4, death_function = monster_death)
+                ai_component = BasicMonster()
+
+                monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks = True,fighter = fighter_component, ai = ai_component)
+
+            objects.append(monster)
+            pass
+        pass
+
+def is_blocked(x, y):
+    # 测试 map 中的 tile 是否堵塞
+    if map[x][y].blocked:
+        return True
+
+    for object in objects:
+        # 检查任何堵塞的 objects
+        if object.blocks and object.x == x and object.y == y:
+            return True
+    return False
 
 def render_all(): # 渲染
     global fov_map, color_dark_wall, color_light_wall
@@ -277,12 +414,52 @@ def render_all(): # 渲染
                 map[x][y].explored = True
 
     for object in objects:
-        object.draw()
-        pass
-    pass
+        if object != player:
+            object.draw()
+    player.draw()
+    # 防止怪物尸体与角色重叠
 
     libtcod.console_blit( con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
+
+    libtcod.console_set_default_foreground(con, libtcod.white)
+    libtcod.console_print_ex(0, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT,
+        'HP:' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
+
+
+def player_move_or_attack(dx, dy):
+    global fov_recompute
+
+    x = player.x + dx
+    y = player.y + dy
+
+    target = None
+    for object in objects:
+        if object.x == x and object.y == y:
+            target = object
+            break
+
+def player_death(player):
+    # game over
+    global game_state
+    print 'You died!'
+    game_state = 'dead'
+
+    # 增加效果，将玩家变成尸体
+    player.char = '%'
+    player.color = libtcod.dark_red
     pass
+
+def monster_death(monster):
+    # 将怪物变成尸体，但它的尸体不能造成道路堵塞（block）
+    # 变成尸体时不能移动,关闭ai
+    print monster.name.capitalize() + 'is dead!'
+    monster.char = '%'
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remians of ' + monster.name
+    monster.send_to_back()
+
 
 def handle_keys():#控制键位与角色行走
     '''global playerx,playery # 备用'''
@@ -301,27 +478,28 @@ def handle_keys():#控制键位与角色行走
         return True
         # 按下 ESC 则 exit game
 
-    if libtcod.console_is_key_pressed(libtcod.KEY_UP):
-        player.move(0, -1)
-        fov_recompute = True
-        # fov_recompute 只要玩家移动或 tile 改变，FOV只需要重新计算。
-        # 为了建模，我们将在主循环之前定义一个全局变量fov_recompute = True。
-        # 然后，在handle_keys函数中，每当玩家移动，我们将其设置为True
+    if game_state == 'playing':
+        if libtcod.console_is_key_pressed(libtcod.KEY_UP):
+            player.move(0, -1)
+            fov_recompute = True
+            # fov_recompute 只要玩家移动或 tile 改变，FOV只需要重新计算。
+            # 为了建模，我们将在主循环之前定义一个全局变量fov_recompute = True。
+            # 然后，在handle_keys函数中，每当玩家移动，我们将其设置为True
 
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
-        player.move(0, 1)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
+            player.move(0, 1)
+            fov_recompute = True
 
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
-        player.move(-1, 0)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
+            player.move(-1, 0)
+            fov_recompute = True
 
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
-        player.move(1, 0)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
+            player.move(1, 0)
+            fov_recompute = True
 
     '''
     if libtcod.console_is_key_pressed(libtcod.KEY_UP):
@@ -340,13 +518,23 @@ def handle_keys():#控制键位与角色行走
     # 备用
     '''
 
+
+'''
 player = Object(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', libtcod.white)
 # 角色
 
 npc = Object(SCREEN_WIDTH/2 - 5, SCREEN_HEIGHT/2, '@', libtcod.yellow)
 # 用于测试 黄色的@代表一个非玩家的角色(NPC)
 
+
 objects = [npc, player]
+备用
+'''
+fighter_component = Fighter (hp = 30, defense = 2, power = 5, death_function = player_death)
+
+player = Object(0, 0, '@', 'player', libtcod.white, blocks = True, fighter = fighter_component)
+
+objects = [player]
 
 make_map()
 
@@ -365,6 +553,10 @@ for y in range(MAP_HEIGHT):
     pass
 
 fov_recompute = True
+
+game_state = 'playing'
+
+player_action = None
 
 while not libtcod.console_is_window_closed():
 
@@ -395,5 +587,12 @@ while not libtcod.console_is_window_closed():
     exit = handle_keys()
     if exit:
         break
+
+    if game_state == 'playing' and player_action != 'didnt-take-turn':
+        for object in objects:
+            if object.ai:
+                object.ai.take_turn()
+                pass
+        pass
 
 
