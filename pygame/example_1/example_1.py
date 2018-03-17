@@ -127,6 +127,8 @@ while running:
             new_enemy = Enemy()
             enemies.add(new_enemy)
             all_sprites.add(new_enemy)
+            # 监听 ADDENEMY 事件
+            # 创建一个 Enemy类的实例,将实例添加到 enemies 这个 Sprite Group(检测冲突) 和 all_sprites Group（这样它会和其他对象一起渲染）
 
         elif event.type == ADDCLOUD:
             new_cloud = Cloud()
@@ -143,9 +145,11 @@ while running:
 
     for entity in all_sprites:
         screen.blit(entity.image, entity.rect)
+        # 渲染
 
     if pygame.sprite.spritecollideany(player, enemies):
         player.kill()
+        # spritecollideany() 检测 Sprite 对象是否和 Sprite Group 中的其他 Sprites 冲突
 
     pygame.display.flip()
     # 刷新
