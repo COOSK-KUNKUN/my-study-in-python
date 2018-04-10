@@ -2,6 +2,7 @@
 
 import libtcodpy as libtcod
 import math
+import textwrap
 
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
@@ -36,6 +37,15 @@ playery = SCREEN_HEIGHT/2
 MAX_ROOM_MONSTERS = 3
 # 最大怪物量为3
 
+BAR_WIDTH = 20
+PANEL_HEIGHT = 7
+PANEL_Y = SCREEN_HEIGHT - PANEL_HEIGHT
+# 状态栏的大小于坐标
+
+MSG_X = BAR_WIDTH + 2
+MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH - 2
+MSG_HEIGHT = PANEL_HEIGHT - 1
+
 libtcod.console_set_custom_font('arial12x12.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # 设定字体
 # 字体来源于 arial12x12.png 的位图字体
@@ -60,6 +70,8 @@ libtcod.console_blit( con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 # xDst，yDst 目标控制台中源区域左上角的位置
 # foregroundAlpha，backgroundAlpha 控制台的Alpha透明度
 # 1.0 =>源控制台是不透明的
+
+panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
 
 class Tile:
     """设定能否通过的区域"""
@@ -130,9 +142,10 @@ class Object:
 
     def send_to_back(self):
         global object
-        object.remove(self)
-        object.insert(0, self)
+        objects.remove(self)
+        objects.insert(0, self)
         pass
+    # 返回怪物尸体的值
 
 class Rect:
     """docstring for Rect"""
@@ -179,13 +192,18 @@ class Fighter:
         damage = self.power - target.fighter.defense
 
         if damage > 0:
-            # 使目标受到伤害
-            print self.owner.name.capitalize() + 'attack' + target.name + 'for' + str(damage) + 'hit points.'
+            # 使目标受到伤害的信息以消息 message  的方式打印出来
+            '''
+            print self.owner.name.capitalize() + ' attack ' + target.name + 'for ' + str(damage) + 'hit points.'
             target.fighter.take_damage(damage)
         else:
-            print self.owner.name.capitalize() + 'attack' + target.name + 'but it has no effect!'
-            pass
-        pass
+            print self.owner.name.capitalize() + ' attack ' + target.name + 'but it has no effect!'
+            '''
+            message(self.owner.name.capitalize() + ' attack ' + target.name + ' for ' + str(damage) + 'hit points')
+            target.fighter.take_damage(damage)
+        else:
+            message(self.owner.name.capitalize() + ' attack ' + target.name + ' but it has no effect!')
+
 
 class BasicMonster:
     """基本怪物AI"""
@@ -363,7 +381,7 @@ def place_objects(room):
                 fighter_component = Fighter(hp = 16, defense = 1, power = 4, death_function = monster_death)
                 ai_component = BasicMonster()
 
-                monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks = True,fighter = fighter_component, ai = ai_component)
+                monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks = True, fighter = fighter_component, ai = ai_component)
 
             objects.append(monster)
             pass
@@ -417,26 +435,105 @@ def render_all(): # 渲染
         if object != player:
             object.draw()
     player.draw()
-    # 防止怪物尸体与角色重叠
+    # 防止怪物尸体与角色重叠，造成无法渲染
 
     libtcod.console_blit( con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 
     libtcod.console_set_default_foreground(con, libtcod.white)
     libtcod.console_print_ex(0, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT,
         'HP:' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
+    # 在屏幕左下角显示玩家的血量
 
+    libtcod.console_set_default_background(panel, libtcod.black)
+    libtcod.console_clear(panel)
+    # 准备呈现GUI状态栏
+
+    y = 1
+    for (line, color) in game_msgs:
+        libtcod.console_set_default_foreground(panel, color)
+        libtcod.console_print_ex(panel, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
+        y += 1
+    # 将状态栏渲染出来
+
+    render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp, libtcod.light_red, libtcod.darker_red)
+    # 显示玩家的统计
+
+    libtcod.console_blit(panel, 0, 0, SCREEN_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_Y)
+    # 将“面板”的内容提交到根控制台
+
+    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS|libtcod.EVENT_MOUSE, key, mouse)
+    # sys_check_for_event函数返回键盘和鼠标活动的信息
+
+    libtcod.console_set_default_foreground(panel, libtcod.light_gray)
+    libtcod.console_print_ex(panel, 1, 0, libtcod.BKGND_NONE,  libtcod.LEFT, get_names_under_mouse())
+
+def render_bar(x, y, total_width, name, value, maximum, bar_color, back_color):
+    # 渲染状态栏（血量， 经验等 ），但首先计算状态栏的宽度
+
+    bar_width = int (float (value) / maximum * total_width)
+
+    libtcod.console_set_default_background(panel, back_color)
+    libtcod.console_rect(panel, x, y, total_width, 1, False, libtcod.BKGND_SCREEN)
+    # 渲染后台
+
+    libtcod.console_set_default_background(panel, bar_color)
+    if bar_width > 0:
+        libtcod.console_rect(panel, x, y, bar_width, 1, False, libtcod.BKGND_SCREEN)
+        pass
+    # 将状态栏呈现在顶上
+
+    libtcod.console_set_default_foreground(panel, libtcod.white)
+    libtcod.console_print_ex(panel, x + total_width / 2, y, libtcod.BKGND_NONE, libtcod.CENTER, name + ':' + str(value) + '/' + str(maximum))
+    pass
+
+def message(new_msg, color = libtcod.white):
+    new_msg_lines = textwrap.wrap(new_msg, MSG_WIDTH)
+
+    for line in new_msg_lines:
+        if len(game_msgs) == MSG_HEIGHT:
+            del game_msgs[0]
+        # 如果消息超出消息的最大高度，就删除第一行以腾出空间给新的一个
+
+        game_msgs.append((line, color))
+        # 将新行添加为元组，文本和颜色
+
+def get_names_under_mouse():
+    global mouse
+
+    (x, y) = (mouse.cx, mouse.cy)
+    # 返回一个字符串，其中包含鼠标下所有对象的名称
+    # 访问鼠标结构的cx和cy字段,它们是鼠标结束的图块（或单元格）的坐标。
+
+    names = [obj.name for obj in objects
+        if obj.x == x and obj.y == y and libtcod.map_is_in_fov(fov_map, obj.x, obj.y)]
+    # 收集满足几个条件的对象名称列表
+    # 它们在鼠标下面和玩家的FOV内（they're under the mouse, and inside the player's FOV. ）
+
+    names = ', '.join(names) # 在 name 中，用逗号分隔
+    return names.capitalize()
 
 def player_move_or_attack(dx, dy):
     global fov_recompute
 
     x = player.x + dx
     y = player.y + dy
+    # 协调 player 边移动边攻击
 
     target = None
     for object in objects:
-        if object.x == x and object.y == y:
+        if object.fighter and object.x == x and object.y == y:
             target = object
             break
+    # 尝试去寻找被攻击的目标
+
+    if target is not None:
+        player.fighter.attack(target)
+        print 'The' + target.name + 'laughs at puny efforts to attack him!'
+    else:
+        player.move(dx, dy)
+        fov_recompute = True
+        pass
+    # 如果发现目标攻击并移动
 
 def player_death(player):
     # game over
@@ -454,6 +551,7 @@ def monster_death(monster):
     # 变成尸体时不能移动,关闭ai
     print monster.name.capitalize() + 'is dead!'
     monster.char = '%'
+    monster.color = libtcod.dark_red
     monster.blocks = False
     monster.fighter = None
     monster.ai = None
@@ -463,9 +561,12 @@ def monster_death(monster):
 
 def handle_keys():#控制键位与角色行走
     '''global playerx,playery # 备用'''
-    global fov_recompute
+    '''global fov_recompute'''
+    global key
 
+    '''
     key = libtcod.console_wait_for_keypress(True)
+    '''
 
     if key.vk == libtcod.KEY_ENTER and key.lalt:
         # Alt + Enter: toggle fullscreen
@@ -480,7 +581,7 @@ def handle_keys():#控制键位与角色行走
 
     if game_state == 'playing':
         if libtcod.console_is_key_pressed(libtcod.KEY_UP):
-            player.move(0, -1)
+            player_move_or_attack(0, -1)
             fov_recompute = True
             # fov_recompute 只要玩家移动或 tile 改变，FOV只需要重新计算。
             # 为了建模，我们将在主循环之前定义一个全局变量fov_recompute = True。
@@ -488,18 +589,21 @@ def handle_keys():#控制键位与角色行走
 
 
         elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
-            player.move(0, 1)
+            player_move_or_attack(0, 1)
             fov_recompute = True
 
 
         elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
-            player.move(-1, 0)
+            player_move_or_attack(-1, 0)
             fov_recompute = True
 
 
         elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
-            player.move(1, 0)
+            player_move_or_attack(1, 0)
             fov_recompute = True
+
+        else:
+            return 'didnt-take-turn'
 
     '''
     if libtcod.console_is_key_pressed(libtcod.KEY_UP):
@@ -530,7 +634,7 @@ npc = Object(SCREEN_WIDTH/2 - 5, SCREEN_HEIGHT/2, '@', libtcod.yellow)
 objects = [npc, player]
 备用
 '''
-fighter_component = Fighter (hp = 30, defense = 2, power = 5, death_function = player_death)
+fighter_component = Fighter (hp = 100, defense = 3, power = 5, death_function = player_death)
 
 player = Object(0, 0, '@', 'player', libtcod.white, blocks = True, fighter = fighter_component)
 
@@ -558,6 +662,15 @@ game_state = 'playing'
 
 player_action = None
 
+game_msgs = []
+# 创建游戏消息列表及其颜色，开始为空
+
+message('Welcome stranger! Prepare to perish in the Tombs of Ancient Kings.', libtcod.red)
+
+mouse = libtcod.Mouse()
+key = libtcod.Key()
+# 鼠标界面
+
 while not libtcod.console_is_window_closed():
 
     '''
@@ -575,6 +688,7 @@ while not libtcod.console_is_window_closed():
 
     # 备用1
     '''
+    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS|libtcod.EVENT_MOUSE, key,mouse)
     render_all()
     # 调用 render_all() 函数
 
@@ -584,15 +698,13 @@ while not libtcod.console_is_window_closed():
     for object in objects:
         object.clear()
 
-    exit = handle_keys()
-    if exit:
+    player_action = handle_keys()
+    if player_action == 'exit':
         break
 
     if game_state == 'playing' and player_action != 'didnt-take-turn':
         for object in objects:
             if object.ai:
                 object.ai.take_turn()
-                pass
-        pass
 
 
