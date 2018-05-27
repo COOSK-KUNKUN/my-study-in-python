@@ -17,8 +17,8 @@ ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 # 房间最大的数量
 
-color_dark_wall = libtcod.Color(0, 0, 100)
-color_light_wall = libtcod.Color(130, 110, 50)
+color_dark_wall = libtcod.Color(0, 0, 100) # 视野外的墙壁颜色
+color_light_wall = libtcod.Color(130, 110, 50) #视野内的墙壁颜色
 color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
@@ -45,6 +45,12 @@ PANEL_Y = SCREEN_HEIGHT - PANEL_HEIGHT
 MSG_X = BAR_WIDTH + 2
 MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH - 2
 MSG_HEIGHT = PANEL_HEIGHT - 1
+
+MAX_ROOM_ITEMS = 2
+
+INVENTORY_WIDTH = 50
+
+HEAL_AMOUNT = 4
 
 libtcod.console_set_custom_font('arial12x12.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # 设定字体
@@ -87,7 +93,7 @@ class Tile:
 
 class Object:
     """这是一个通用的对象：玩家，怪物，物品，楼梯......  """
-    def __init__(self, x, y, char,  name , color, blocks = False, fighter = None, ai = None):
+    def __init__(self, x, y, char,  name , color, blocks = False, fighter = None, ai = None, item = None):
         self.x = x
         self.y = y
         self.char = char
@@ -107,6 +113,11 @@ class Object:
             self.ai.owner = self
             pass
 
+        self.item = item
+        if self.item:
+            self.item.owner = self
+            pass
+
     def move(self, dx, dy):
         '''if not map[self.x + dx][self.y + dy].blocked:# 如果移动超出地图自动退出 备用'''
         if not is_blocked(self.x + dx, self.y + dy):
@@ -118,6 +129,7 @@ class Object:
         if libtcod.map_is_in_fov(fov_map, self.x, self.y):
             libtcod.console_set_default_foreground(con, self.color )
             libtcod.console_put_char(con, self.x, self.y, self.char, libtcod.BKGND_NONE)
+            # 设置颜色，然后在其位置绘制表示此对象的字符
 
     def clear(self):
         libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
@@ -155,6 +167,7 @@ class Rect:
         self.x2 = x + w
         self.y2 = y + h
     # 创建矩形房间的框架
+    # 左上角（x1，y1）和右下角（x2，y2）
 
     def center(self):
         center_x = (self.x1 + self.x2)/2
@@ -204,6 +217,14 @@ class Fighter:
         else:
             message(self.owner.name.capitalize() + ' attack ' + target.name + ' but it has no effect!')
 
+    def cast_heal():
+        if player.fighter.hp == player.fighter.max_hp:
+            message("You are already at full health", libtcod.red)
+            return 'cancelled'
+
+        message('Your wounds start to feel better!', libtcod.light_violet)
+        player.fighter.heal(HEAL_AMOUNT)
+
 
 class BasicMonster:
     """基本怪物AI"""
@@ -222,6 +243,30 @@ class BasicMonster:
                 monster.fighter.attack(player)
                 print 'The attack of the ' + monster.name + 'bounces off your shiny metal armor'
 
+class Item:
+    """可以拾取和使用的物品"""
+    def __init__(self, use_function=None):
+        self.use_function = use_function
+
+
+    def pick_up(self):
+        if len(inventory) >= 26: # 通过按下从A到Z的键来选择项目，并且只有26个字母
+            message("Your inventory is full, cannot pick up" + self.owner.name + ".", libtcod.red )
+            pass
+        else:
+            inventory.append(self.owner)
+            objects.remove(self.owner)
+            message("You picked up a" + self.owner.name + '!', libtcod.green)
+
+    def use(slef):
+        if self.use_function is None:
+            message('The' + self.owner.name + 'cannot be used')
+        else:
+            if self.use_function() != 'cancelled':
+                inventory.remove(self.owner)
+                # 使用后销毁, 除非因某种原因被取消
+                pass
+        pass
 def create_room(room):
     global map
 
@@ -232,7 +277,7 @@ def create_room(room):
             # 左上角x1,y1 右下角x2,y2
             pass
         pass
-    # room.x2/y2 + 1 使彼此不相邻的 room 总有一道墙隔开
+    # room.x2/y2 + 1 使 room 彼此不相邻且总有一道墙隔开
     pass
 
 def make_map():
@@ -284,6 +329,7 @@ def make_map():
         x = libtcod.random_get_int(0, 0, MAP_WIDTH - w - 1)
         y = libtcod.random_get_int(0, 0, MAP_HEIGHT - h - 1)
         # 在地图范围内随机 room 的位置
+        # 且随机的位置不超过地图的边界
         # random_get_int 返回两个数字之间的随机整数
         # (0, 0) 默认
 
@@ -294,10 +340,10 @@ def make_map():
             if new_room.intersect(other_room):
                 failed = True
                 break
-        # 创建另一个 room 看他是否相交这个 room
+        # 创建另一个 room 看他是否重叠或相交这个 room
 
         if not failed:
-        # 如果没有相交，则这个 room 是有效的
+        # 如果没有重叠或相交，则这个 room 是有效的
             create_room(new_room)
 
             (new_x, new_y) = new_room.center()
@@ -308,11 +354,11 @@ def make_map():
                 # 当玩家第一次所在的位置时，这将是第一个 room
 
             else:
-                # 当所有的 room 在第一个 room 的后面
-                # 用隧道 tunnel 连接这些以前/之后(previons room?)的 room
+                # 在第一个房间后的所有房间
+                # 用隧道将它连接到先前的房间
 
                 (prev_x, prev_y) = rooms[num_rooms - 1].center()
-                # 协调这些 room 的中心坐标
+                # 新 room 的中心坐标
 
                 if libtcod.random_get_int(0, 0, 1) == 1:
                     create_h_tunnel(prev_x, new_x, prev_y)
@@ -331,8 +377,6 @@ def make_map():
             rooms.append(new_room)
             num_rooms +=1
 
-        pass
-
 def create_h_tunnel(x1, x2, y):# 水平隧道
     global map
 
@@ -344,6 +388,8 @@ def create_h_tunnel(x1, x2, y):# 水平隧道
     for x in range(x1, x2 + 1):
         pass
     pass
+    # 返回两个参数的最小值或最大值
+    # 如果x1 <x2，x1将是两者的最小值，x2是最大值
     # 创建一个从一个room 到另一个room 的隧道
 
 def create_v_tunnel(y1, y2, x):# 垂直隧道
@@ -356,7 +402,7 @@ def create_v_tunnel(y1, y2, x):# 垂直隧道
     pass
 
 def place_objects(room):
-    # 选择怪物的随机数
+    # 怪物与物品的随机位置
 
     num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
 
@@ -385,6 +431,21 @@ def place_objects(room):
 
             objects.append(monster)
             pass
+
+    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
+
+    for i in range(num_items):
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
+
+        if not is_blocked(x, y):
+            item_component = Item(use_function=cast_heal)
+            item = Object(x, y, '!', 'healing potion', libtcod.violet, item = item_component)
+            # 创建一个治疗药水
+
+            objects.append(item)
+            item.send_to_back()
+            # item 出现在其他对象的下面
         pass
 
 def is_blocked(x, y):
@@ -398,7 +459,7 @@ def is_blocked(x, y):
             return True
     return False
 
-def render_all(): # 渲染
+def render_all(): # 绘制列表中的所有对象
     global fov_map, color_dark_wall, color_light_wall
     global color_dark_ground, color_light_ground
     global fov_recompute
@@ -603,21 +664,31 @@ def handle_keys():#控制键位与角色行走
             fov_recompute = True
 
         else:
+
+            key_char = chr(key.c)
+
+            if key_char == 'g':
+                for object in objects:
+                    if object.x == player.x and object.y == player.y and object.Item:
+                        object.item.pick_up()
+                        break
+
+            if key_char == 'i':
+                # 显示库存
+                inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
+                pass
+
             return 'didnt-take-turn'
 
     '''
     if libtcod.console_is_key_pressed(libtcod.KEY_UP):
         playery -= 1
-
     elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
         playery += 1
-
     elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
         playerx -= 1
-
     elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
         playerx += 1
-
     # 该代码存在缺陷，当角色改变方向时，总会像原来的方向再前进一格，才改变方向。
     # 备用
     '''
@@ -626,14 +697,59 @@ def handle_keys():#控制键位与角色行走
 '''
 player = Object(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', libtcod.white)
 # 角色
-
 npc = Object(SCREEN_WIDTH/2 - 5, SCREEN_HEIGHT/2, '@', libtcod.yellow)
 # 用于测试 黄色的@代表一个非玩家的角色(NPC)
-
-
 objects = [npc, player]
 备用
 '''
+
+def menu(header, options, width):
+    if len(options) > 26:raise ValueError('Cannot have a menu with more than 26 options.')
+
+    header_heght = libtcod.console_get_height_rect(con, 0, 0, widh, SCREEN_HEIGHT, header)
+    height = len(options) + header_heght
+    # 计算页眉 (自动换行后) 和每选项一行的总高度
+
+    window = libtcod.console_new(width, height)
+    # 创建表示菜单窗口的控制台
+
+    libtcod.console_set_default_foreground(window, libtcod.white)
+    libtcod.console_print_rect_ex(window, 0, 0, width, height, libtcod.BKGND_NONE, libtcod.LEFT, header)
+    # 打印 header, 自动换行
+
+    y = header_heght
+    letter_index = ord('a')
+    for option_text in options:
+        text = '('+ chr(letter_index) +')' + option_text
+        y += 1
+        letter_index += 1
+        pass
+    # 打印所有项目
+    # 原理 ： 打印一个循环，第一个选项的 Y 坐标位于页眉的正下方;我们打印该选项的文本, 并增加它。
+    # 然后从字母 A 开始, 每次递增, 以在选项的文本旁边显示它。函数返回字母 A 的 ASCII 码;
+    # 然后, 可以用来增加它来获取其余字母的代码。
+
+    x = SCREEN_WIDTH/2 - width/2
+    y = SCREEN_HEIGHT/2 - height/2
+    libtcod.console_blit(window, 0, 0, width, height, 0, x, y, 1.0, 0.7)
+    # 1.0 ， 0.7 它们分别定义了前景(文本)和背景的透明度
+
+    libtcod.console_flush()
+    key = libtcod.console_wait_for_keypress(True)
+    # 等待玩家做出选择，游戏才能继续
+
+def inventory_menu(header):
+    # 显示库存
+    # 将 menu 中每个项目的 item 显示为选项
+
+    if len(inventory) == 0:
+        options = ['Inventory is empty']
+    else:
+        options = [item.name for item in inventory]
+
+    index = menu(header, options, INVENTORY_WIDTH)
+
+
 fighter_component = Fighter (hp = 100, defense = 3, power = 5, death_function = player_death)
 
 player = Object(0, 0, '@', 'player', libtcod.white, blocks = True, fighter = fighter_component)
@@ -665,6 +781,8 @@ player_action = None
 game_msgs = []
 # 创建游戏消息列表及其颜色，开始为空
 
+inventory = []
+
 message('Welcome stranger! Prepare to perish in the Tombs of Ancient Kings.', libtcod.red)
 
 mouse = libtcod.Mouse()
@@ -676,16 +794,12 @@ while not libtcod.console_is_window_closed():
     '''
     libtcod.console_set_default_foreground( 0, libtcod.white) 
     # 背景颜色白色
-
     libtcod.console_put_char( 0, playerx, playery, '@', libtcod.BKGND_NONE)
     # 打印一个字符到坐标（playerx,playery）. 0 表示再次指定控制台。
-
     libtcod.console_flush()
     # 刷新
-
     libtcod.console_put_char( 0, playerx, playery, ' ', libtcod.BKGND_NONE)
     # ‘ ’要空格
-
     # 备用1
     '''
     libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS|libtcod.EVENT_MOUSE, key,mouse)
@@ -706,5 +820,3 @@ while not libtcod.console_is_window_closed():
         for object in objects:
             if object.ai:
                 object.ai.take_turn()
-
-
