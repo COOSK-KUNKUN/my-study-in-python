@@ -43,20 +43,17 @@ MSG_HEIGHT = PANEL_HEIGHT - 1
 MAX_ROOM_ITEMS = 2
 
 INVENTORY_WIDTH = 50
-HEAL_AMOUNT = 4
-# 地图上的药水数量
 
-LIGHTNING_DAMAGE = 20
-LIGHTNING_RANGE = 8
-# 闪电法术伤害数值
+HEAL_AMOUNT = 40
 
+LIGHTNING_DAMAGE = 40 # 闪电法术伤害数值
+LIGHTNING_RANGE = 5
+
+CONFUSE_RANGE = 8     # 迷惑法术
 CONFUSE_NUM_TURNS = 10
-CONFUSE_RANGE = 8
-# 迷惑法术
 
-FIREBALL_RADIUS = 3
-FIREBALL_DAMAGE = 12
-# 火球法术伤害数值
+FIREBALL_RADIUS = 3   # 火球法术伤害数值
+FIREBALL_DAMAGE = 25
 
 LEVEL_SCREEN_WIDTH = 40
 LEVEL_UP_BASE = 200
@@ -76,9 +73,30 @@ class Tile:
         if block_sight is None: block_sight = blocked
         self.block_sight = block_sight
 
+class Rect:
+    """用于生成整个地牢的构建模块"""
+    def __init__(self, x, y, w, h):
+        self.x1 = x
+        self.y1 = y
+        self.x2 = x + w
+        self.y2 = y + h
+    # 创建矩形房间的框架
+    # 左上角（x1，y1）和右下角（x2，y2）
+
+    def center(self):
+        center_x = (self.x1 + self.x2)/2
+        center_y = (self.y1 + self.y2)/2
+        return (center_x, center_y)
+    # 创建一个返回 room 中心坐标的方法
+
+    def intersect(self, other):
+        return (self.x1 <= other.x2 and self.x2 >= other.x1 and
+                self.y1 <= other.y2 and self.y2 >= other.y1)
+    # 分割 room 之间的距离使之不重叠
+
 class Object:
     """这是一个通用的对象：玩家，怪物，物品，楼梯......  """
-    def __init__(self, x, y, char,  name , color, blocks = False, fighter = None, ai = None, item = None, always_visible = False):
+    def __init__(self, x, y, char,  name , color, blocks = False, fighter = None, ai = None, item = None, always_visible = False, equipment=None):
         self.x = x
         self.y = y
         self.char = char
@@ -103,6 +121,15 @@ class Object:
         if self.item:
             self.item.owner = self
             pass
+
+        self.equipment = equipment
+        if self.equipment:
+            self.equipment.owner = self
+            pass
+
+        self.item = Item() # 创建一个Item组件 因为每一件 Equipment 是一个 Item
+        self.item.owner = self
+
 
     def move(self, dx, dy):
         '''if not map[self.x + dx][self.y + dy].blocked:# 如果移动超出地图自动退出 备用'''
@@ -146,26 +173,7 @@ class Object:
         pass
     # 返回怪物尸体的值
 
-class Rect:
-    """用于生成整个地牢的构建模块"""
-    def __init__(self, x, y, w, h):
-        self.x1 = x
-        self.y1 = y
-        self.x2 = x + w
-        self.y2 = y + h
-    # 创建矩形房间的框架
-    # 左上角（x1，y1）和右下角（x2，y2）
 
-    def center(self):
-        center_x = (self.x1 + self.x2)/2
-        center_y = (self.y1 + self.y2)/2
-        return (center_x, center_y)
-    # 创建一个返回 room 中心坐标的方法
-
-    def intersect(self, other):
-        return (self.x1 <= other.x2 and self.x2 >= other.x1 and
-                self.y1 <= other.y2 and self.y2 >= other.y1)
-    # 分割 room 之间的距离使之不重叠
 
 class Fighter:
     """与战斗有关的属性和方法（怪物， 玩家， NPC）"""
@@ -214,7 +222,6 @@ class Fighter:
         if self.hp > self.max_hp:
             self.hp = self.max_hp
 
-
 class BasicMonster:
     """基本怪物AI"""
     def take_turn(self):
@@ -237,7 +244,7 @@ class ConfusedMonster:
         # AI用于临时混淆的怪物（在一段时间后恢复到之前的AI）
 
     def take_turn(self):
-        if self.num_turns >0: # still confused...
+        if self.num_turns >0: # 仍然困惑......
             self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
             self.num_turns -= 1
         # 随机移动（随机X和Y位移在-1和1之间）
@@ -257,23 +264,90 @@ class Item:
         else:
             inventory.append(self.owner)
             objects.remove(self.owner)
-            message("You picked up a" + self.owner.name + '!', libtcod.green)
+            message("You picked up a " + self.owner.name + '!', libtcod.green)
+
+            # 特殊情况：如果相应的设备插槽未使用，则自动装备
+            equipment = self.owner.equipment
+            if equipment and get_equipped_in_slot(equipment.slot) is None:
+                equipment.equip()
 
     def use(self):
+        # 如果对象具有 Equipment 这个组件，则“use”动作是装备或者丢弃v
+        if self.owner.equipment:
+            self.owner.equipment.toggle_equip()
+            return
+
         if self.use_function is None:
-            message('The' + self.owner.name + 'cannot be used')
+            message('The ' + self.owner.name + ' cannot be used')
         else:
             if self.use_function() != 'cancelled':
                 inventory.remove(self.owner)
                 # 使用后销毁, 除非被玩家取消
 
     def drop(self):
+        # 如果对象具有 Equipment 组件，则在删除之前将其取消
+
+        if self.owner.equipment:
+            self.owner.equipment.dequip()
+
         objects.append(self.owner)
         inventory.remove(self.owner)
         self.owner.x = player.x
         self.owner.y = player.y # 获取玩家坐标，使得掉落的物品在玩家的坐标下
         message('You dropped a' + self.owner.name + '.', libtcod.yellow)
         pass
+        # 添加到地图并从 player 的 inventory 中删除。 另外，将它放在玩家的坐标下
+
+class Equipment:
+    # 这是表示装备武器的类
+    def __init__(self, slot):
+        self.slot = slot
+        self.is_equipped = False
+
+    def toggle_equip(self):  #装备与丢弃
+        if self.is_equipped:
+            self.dequip()
+        else:
+            self.equip()
+
+    def equip(self):
+        #装备武器时的信息
+        # 如果插槽已经被使用，请首先解除其中的任何内容
+
+        old_equipment = get_equipped_in_slot(self.slot)
+        if old_equipment is not None:
+            old_equipment.dequip()
+        # 防止同一个插槽中有两个项目，取消旧项目以为新项目腾出空间。
+
+        self.is_equipped = True
+        message('Equipped ' + self.owner.name + ' on ' + self.slot + '.', libtcod.light_green)
+
+    def dequip(self):
+        #丢弃装备的信息
+        if not self.is_equipped: return
+        self.is_equipped = False
+        message('Dequipped ' + self.owner.name + ' from ' + self.slot + '.', libtcod.light_yellow)
+
+def get_equipped_in_slot(slot):  # 将设备返回到插槽中，如果设备为空，则返回None
+    for obj in inventory:
+        if obj.equipment and obj.equipment.slot == slot and obj.equipment.is_equipped:
+            return obj.equipment
+    return None
+
+def get_all_equipped(obj):  #返回配备项目列表
+    if obj == player:
+
+        equipped_list = []
+
+        for item in inventory:
+            if item.equipment and item.equipment.is_equipped:
+                equipped_list.append(item.equipment)
+            # 如果他们的插槽可用，则自动装备拾取的物品
+
+        return equipped_list
+    else:
+        return []  # 其他物品没有 equipment
+
 
 def create_room(room):
     global map
@@ -286,7 +360,6 @@ def create_room(room):
             pass
         pass
     # room.x2/y2 + 1 使 room 彼此不相邻且总有一道墙隔开
-    pass
 
 def make_map():
     global map, objects, stairs
@@ -349,7 +422,6 @@ def make_map():
                     create_v_tunnel(prev_y, new_y, prev_x)
                     create_h_tunnel(prev_x, new_x, new_y)
                     # 首先垂直移动，然后水平移动
-                pass
 
             place_objects(new_room)
 
@@ -380,70 +452,102 @@ def create_v_tunnel(y1, y2, x):# 垂直隧道
     pass
 
 def place_objects(room):
-    # 怪物与物品的随机位置
+    #这是决定每个怪物或物品出现的机会方法。
 
-    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+    #每个房间最多的怪物数量
+    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
+
+    #每个怪物出现的概率以及等级
+    monster_chances = {}
+    monster_chances['orc'] = 80  # 80%
+    monster_chances['troll'] = from_dungeon_level([[15, 3], [30, 5], [60, 7]])
+
+    #每间 room 的最大物品数量
+    max_items = from_dungeon_level([[1, 1], [2, 4]])
+
+    #每个物品出现的概率(默认情况下，它们在第一层的时候只有0%的机会，然后上升)
+    item_chances = {}
+    item_chances['heal'] = 35  #35%
+    item_chances['lightning'] = from_dungeon_level([[25, 4]])
+    item_chances['fireball'] =  from_dungeon_level([[25, 6]])
+    item_chances['confuse'] =   from_dungeon_level([[10, 2]])
+    item_chances['sword'] =     from_dungeon_level([[5, 4]])
+    item_chances['shield'] =    from_dungeon_level([[15, 8]])
+
+    #选择随机数量的怪物
+    num_monsters = libtcod.random_get_int(0, 0, max_monsters)
 
     for i in range(num_monsters):
-        # 随机怪物的出生点
-        x = libtcod.random_get_int(0, room.x1, room.x2)
-        y = libtcod.random_get_int(0, room.y1, room.y2)
-
-        if not is_blocked(x, y):
-            # 如果没有被阻塞
-            if libtcod.random_get_int(0, 0, 100) < 80:
-                # 80%的几率生成一个兽人
-
-                fighter_component = Fighter(hp = 10, defense = 0, power = 3, xp = 35, death_function = monster_death)
-                # 设置生命，防御力，力量
-
-                ai_component = BasicMonster()
-
-                monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks = True,fighter = fighter_component, ai = ai_component)
-            else:
-                # 否则生成一个巨魔
-                fighter_component = Fighter(hp = 16, defense = 1, power = 4, xp = 100, death_function = monster_death)
-                ai_component = BasicMonster()
-
-                monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks = True, fighter = fighter_component, ai = ai_component)
-
-            objects.append(monster)
-
-
-    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
-
-    for i in range(num_items):
+        #为这个怪物选择随机点
         x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
         y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
 
+        #只有在 tile 未被阻挡时才放置它
         if not is_blocked(x, y):
-            dice = libtcod.random_get_int(0, 0, 100) # 在 治疗药水 与 闪电魔法卷轴 随机选择
-            if dice < 70:
-                item_component = Item(use_function = cast_heal)
-                item = Object(x, y, '!', 'healing potion', libtcod.violet, item = item_component)
-                # 创建一个治疗药水（70％机会）
+            choice = random_choice(monster_chances)
+            if choice == 'orc':
+                #创建兽人
+                fighter_component = Fighter(hp=20, defense=0, power=4, xp=35, death_function=monster_death)
+                ai_component = BasicMonster()
 
-            elif dice < 70 + 10:
-                item_component = Item(use_function = cast_lightning)
-                item = Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item = item_component)
-                # 创建闪电卷轴（15％几率）
+                monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green,
+                                 blocks=True, fighter=fighter_component, ai=ai_component)
 
-            elif dice < 70 + 10 + 10:
-                item_component = Item(use_function = cast_fireball)
+            elif choice == 'troll':
+                #创建巨魔
+                fighter_component = Fighter(hp=30, defense=2, power=8, xp=100, death_function=monster_death)
+                ai_component = BasicMonster()
 
-                item = Object(x, y, '#', 'scroll of fireball', libtcod.light_yellow, item = item_component)
+                monster = Object(x, y, 'T', 'troll', libtcod.darker_green,
+                                 blocks=True, fighter=fighter_component, ai=ai_component)
 
-            else:
-                item_component = Item(use_function = cast_lightning)
-                item = Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item = item_component)
-                # 创建一个迷惑法术（15％几率）
+            objects.append(monster)
+
+    # 选择随机数量的项目
+    num_items = libtcod.random_get_int(0, 0, max_items)
+
+    for i in range(num_items):
+        #为这个项目选择随机点
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
+
+        #只有在 tile 未被阻挡时才放置它
+        if not is_blocked(x, y):
+            choice = random_choice(item_chances)
+            if choice == 'heal':
+                #创建治疗药水
+                item_component = Item(use_function=cast_heal)
+                item = Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
+
+            elif choice == 'lightning':
+                #创建一个闪电滚动
+                item_component = Item(use_function=cast_lightning)
+                item = Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item=item_component)
+
+            elif choice == 'fireball':
+                #创建一个火球滚动
+                item_component = Item(use_function=cast_fireball)
+                item = Object(x, y, '#', 'scroll of fireball', libtcod.light_yellow, item=item_component)
+
+            elif choice == 'confuse':
+                #创建一个混乱的滚动
+                item_component = Item(use_function=cast_confuse)
+                item = Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item=item_component)
+
+            elif choice == 'sword':
+                #创建一个刀
+                equipment_component = Equipment(slot='right hand', power_bonus=3)
+                item = Object(x, y, '/', 'sword', libtcod.sky, equipment=equipment_component)
+
+            elif choice == 'shield':
+                #创建一个盾牌
+                equipment_component = Equipment(slot='left hand', defense_bonus=1)
+                item = Object(x, y, '[', 'shield', libtcod.darker_orange, equipment=equipment_component)
 
             objects.append(item)
-            item.send_to_back()
-            # item 出现在其他对象的下面
+            item.send_to_back()  # items 显示在其他对象下方
+            item.always_visible = True  # 如果在探索区域内，即使在FOV之外也可以看到物品
 
-            item.always_visible = True
-            # 即使不在探索范围里，FOV 仍可见
 
 
 
@@ -466,7 +570,6 @@ def render_all(): # 绘制列表中的所有对象
     if fov_recompute:
         fov_recompute = False
         libtcod.map_compute_fov(fov_map, player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO)
-        pass
     # 改变渲染代码来实际重新计算FOV，并显示结果！
     # 只需要重新计算FOV，并在recompute_fov为True的情况下渲染地图（然后我们将其重置为False）
 
@@ -591,8 +694,7 @@ def player_move_or_attack(dx, dy):
     else:
         player.move(dx, dy)
         fov_recompute = True
-        pass
-    # 如果发现目标攻击并移动
+        # 如果发现目标攻击并移动
 
 def player_death(player):
     # game over
@@ -627,7 +729,7 @@ def handle_keys():#控制键位与角色行走
     '''
 
     if key.vk == libtcod.KEY_ENTER and key.lalt:
-        # Alt + Enter: toggle fullscreen
+        # Alt + Enter: 全屏
         # 切换键
 
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
@@ -746,7 +848,7 @@ def cast_confuse():
 def closest_monster(max_range): # 找到最近的敌人，达到最大范围，并且在玩家的FOV里
     closest_enemy = None
     closest_dist = max_range + 1
-    # 开始时（稍大于）最大范围
+    # 开始时的最大范围
 
     for object in objects:
         if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
@@ -861,6 +963,36 @@ def next_level():
     make_map()
     initialize_fov()
 
+def random_choice_index(chances):  #从 chances 列表中选择一个选项，返回其索引
+    #骰子将落在1和1之间的数字之间
+    dice = libtcod.random_get_int(0, 1, sum(chances))
+    # sum(chances) 接受一个数字列表并返回它们的总和
+
+    #  遍历所有 chances ，保持其 sum
+    running_sum = 0
+    choice = 0
+    for w in chances:
+        running_sum += w
+
+        #看看骰子是否落在与此选择相对应的部分
+        if dice <= running_sum:
+            return choice
+        choice += 1
+
+def random_choice(chances_dict):
+    #从 chances_dict 中选择一个选项，并返回其关键词
+    chances = chances_dict.values()
+    strings = chances_dict.keys()
+
+    return strings[random_choice_index(chances)]
+
+def from_dungeon_level(table):
+    #返回一个等级的值。该函数指定每个级别后出现的值，默认值为0.
+    for (value, level) in reversed(table):
+        if dungeon_level >= level:
+            return value
+    return 0
+
 def play_game():
     global key, mouse
 
@@ -913,6 +1045,7 @@ def load_game():
     map = file['map']
     objects = file['objects']
     player = objects[file['player_index']]
+    stairs = objects[file['stairs_index']]
     inventory = file['inventory']
     game_msgs = file['game_msgs']
     game_state = file['game_state']
@@ -921,7 +1054,6 @@ def load_game():
     file.close()
 
     initialize_fov()
-
 
 def menu(header, options, width):
     if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
@@ -963,7 +1095,6 @@ def menu(header, options, width):
     if key.vk == libtcod.KEY_ENTER and key.lalt:
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
 
-
     index = key.c - ord('a')
     if index >= 0 and index < len(options):return index
     return None
@@ -1002,8 +1133,6 @@ def msgbox(text, width = 50):
     menu(text, [], width)
     # 使用 menu() 作为一种“消息框”
 
-
-
 libtcod.console_set_custom_font('arial12x12.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # 设定字体
 # 字体来源于 arial12x12.png 的位图字体
@@ -1015,8 +1144,7 @@ libtcod.sys_set_fps(LIMIT_FPS)
 # 限制游戏的速度 (帧每秒或FPS)
 
 con = libtcod.console_new( SCREEN_WIDTH, SCREEN_WIDTH)
-# 创建一个新的屏幕外控制台
-# 重要！！！！！
+# 创建一个新的屏幕外控制台, 重要！！！！！dice = libtcod.random_get_int
 
 libtcod.console_blit( con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 # blit 允许您将源控制台的矩形区域移动到目标控制台上的特定位置
